@@ -1,14 +1,23 @@
-# GoClaw All-in-One — Managed mode (PostgreSQL + pgvector + Web Dashboard)
+# GoClaw All-in-One — Local build mode (build from source)
+#
+# Prerequisites:
+#   Clone goclaw source to ../goclaw (sibling directory)
 #
 # Usage:
-#   docker compose up -d
+#   docker compose -f docker-compose-build.yml up -d --build
 #
 # Dashboard: http://localhost:3000
 # API:       http://localhost:3000/v1/
 
 services:
   goclaw:
-    image: itsddvn/goclaw:latest
+    build:
+      context: ../goclaw
+      dockerfile: ${PWD}/Dockerfile
+      additional_contexts:
+        deploy: .
+      args:
+        VERSION: ${GOCLAW_VERSION:-dev}
     ports:
       - "${GOCLAW_UI_PORT:-3000}:8080"
     volumes:

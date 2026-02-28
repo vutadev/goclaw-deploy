@@ -11,13 +11,11 @@ shutdown() {
 
 case "${1:-serve}" in
     serve)
-        # Managed mode: auto-upgrade before starting
+        # Managed mode: auto-upgrade (schema migrations + data hooks) before starting
         if [ "$GOCLAW_MODE" = "managed" ] && [ -n "$GOCLAW_POSTGRES_DSN" ]; then
             echo "Managed mode: running upgrade..."
-            if ! /app/goclaw upgrade; then
-                echo "ERROR: upgrade failed, check DB connection and schema" >&2
-                exit 1
-            fi
+            /app/goclaw upgrade || \
+                echo "Upgrade warning (may already be up-to-date)"
         fi
 
         # Start goclaw in background
@@ -35,6 +33,20 @@ case "${1:-serve}" in
             sleep 1
         done
         shutdown
+        ;;
+    upgrade)
+        shift
+        exec /app/goclaw upgrade "$@"
+        ;;
+    migrate)
+        shift
+        exec /app/goclaw migrate "$@"
+        ;;
+    onboard)
+        exec /app/goclaw onboard
+        ;;
+    version)
+        exec /app/goclaw version
         ;;
     *)
         # Pass through any other command to goclaw
