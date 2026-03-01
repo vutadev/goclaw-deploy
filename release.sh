@@ -254,11 +254,18 @@ do_sync() {
 # ═══════════════════════════════════════════════════════════════════════════
 do_publish() {
   # ── TAG ───────────────────────────────────────────────────────────────
-  header "TAG — Get version from goclaw-core"
+  header "TAG — Get version from upstream"
 
-  VERSION=$(git -C "$CORE_DIR" describe --tags 2>/dev/null) || {
-    error "Failed to get version from git tags."
-    error "Ensure tags are fetched: git -C $CORE_DIR fetch upstream --tags"
+  # Fetch latest tags from upstream
+  git -C "$CORE_DIR" fetch upstream --tags --quiet 2>/dev/null || {
+    error "Failed to fetch upstream tags."
+    error "Ensure upstream remote exists: git -C $CORE_DIR remote -v"
+    exit 1
+  }
+
+  VERSION=$(git -C "$CORE_DIR" describe --tags upstream/main 2>/dev/null) || {
+    error "Failed to get version from upstream tags."
+    error "Ensure upstream has tags: git -C $CORE_DIR ls-remote --tags upstream"
     exit 1
   }
 
