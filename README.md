@@ -52,7 +52,7 @@ Open http://localhost:3000 in your browser.
 | `docker-compose-build.yml` | Development | From source | Local Dockerfile |
 | `docker-compose-dokploy.yml` | Dokploy PaaS | Pre-built | Docker Hub (external network) |
 
-All variants use PostgreSQL 18 with pgvector extension for vector storage.
+All variants use PostgreSQL 18 with pgvector extension for vector storage (internal only, not exposed externally).
 
 ## Architecture
 
@@ -217,7 +217,6 @@ docker compose -f docker-compose-build.yml up -d --build --no-cache
 | `docker-compose-build.yml` | Development: builds from source |
 | `docker-compose-dokploy.yml` | Dokploy: external network config |
 | `release.sh` | Automated release workflow |
-| `Makefile` | Multi-arch build and push targets |
 
 ## Security
 

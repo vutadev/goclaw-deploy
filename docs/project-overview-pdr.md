@@ -78,7 +78,7 @@ Provide a production-ready, containerized packaging of GoClaw that enables fast 
 | NFR-5 | Security: non-root user | goclaw:goclaw, CAP_DROP ALL | Complete |
 | NFR-6 | Deployment: zero external deps | Only PostgreSQL external | Complete |
 | NFR-7 | Release automation | Fully scripted, no manual steps | Complete |
-| NFR-8 | Documentation | README + codebase summary + guides | In Progress |
+| NFR-8 | Documentation | README + codebase summary + guides | Complete |
 
 ## Success Metrics
 
@@ -215,13 +215,13 @@ When breaking changes occur:
 - Makefile targets ✓
 - Multi-arch support ✓
 
-### Phase 3: Documentation (Current)
+### Phase 3: Documentation (Complete)
 - README.md with quick start ✓
 - Codebase summary ✓
-- Code standards guide (in progress)
-- System architecture (in progress)
-- Deployment guide (in progress)
-- Troubleshooting FAQ (in progress)
+- Code standards guide ✓
+- System architecture ✓
+- Deployment guide ✓
+- Troubleshooting FAQ ✓
 
 ### Phase 4: Enhancement (Future)
 - Helm charts for Kubernetes

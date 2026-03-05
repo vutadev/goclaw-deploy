@@ -420,19 +420,33 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Preflight checks (fail fast)
-if [[ ! -d "$CORE_DIR" ]]; then
-  error "Core dir not found"
-  exit 1
-fi
+preflight_checks() {
+  [[ -d "$CORE_DIR" ]] || { error "Core dir not found"; exit 1; }
+  [[ -n "$(git -C "$CORE_DIR" remote -v | grep upstream)" ]] || { error "Upstream remote missing"; exit 1; }
+  command -v docker &>/dev/null || { error "Docker not found"; exit 1; }
+  docker buildx version &>/dev/null || { error "buildx not found"; exit 1; }
+}
 
 # Helper functions (reusable)
 health_check() { ... }
 cleanup() { ... }
 trap cleanup EXIT
 
-# Main workflow (structured)
-do_sync() { ... }
-do_publish() { ... }
+# Main workflow phases
+do_sync() {
+  # Checkout main, fetch upstream, merge upstream/main into fork/main
+  # Checkout develop, merge main into develop
+  # Auto-review config diffs (Dockerfile, nginx.conf)
+  # Clean containers, test build
+}
+
+do_publish() {
+  # Get VERSION from git tags
+  # Build multi-arch (linux/amd64)
+  # Push to Docker Hub
+  # Update docker-compose.yml and docker-compose-dokploy.yml
+  # Smoke test, commit
+}
 
 # Routing (clear entry point)
 case "$COMMAND" in
@@ -444,23 +458,43 @@ esac
 **Rules:**
 - Set -euo pipefail (fail on any error)
 - Config at top, mutable (SCRIPT_DIR, IMAGE, VERSION)
-- Preflight checks early
+- Preflight checks early (upstream remote, docker, buildx)
 - Trap cleanup EXIT
-- Use named functions for phases
+- Use named functions for phases (do_sync, do_publish)
 - Clear routing at end
+- Lock file prevents concurrent runs
 
 ### Version Detection
-Always use git tags; never hardcode versions.
+Always use git tags from goclaw-core; never hardcode versions.
 
 ```bash
 VERSION=$(git -C "$CORE_DIR" describe --tags 2>/dev/null) || {
-  error "Failed to get version"
+  error "Failed to get version from goclaw-core"
   exit 1
 }
 
-# Validate
+# Validate format
 [[ -n "$VERSION" ]] || { error "Empty version"; exit 1; }
 [[ "$VERSION" != *"dirty"* ]] || { error "Dirty working tree"; exit 1; }
+[[ "$VERSION" =~ ^v[0-9] ]] || { error "Invalid version format: $VERSION"; exit 1; }
+```
+
+### Lock File Management
+Prevent concurrent release runs.
+
+```bash
+LOCKFILE="/tmp/goclaw-release.lock"
+
+# Acquire lock
+if [[ -f "$LOCKFILE" ]]; then
+  pid=$(cat "$LOCKFILE")
+  if kill -0 "$pid" 2>/dev/null; then
+    error "Already running (PID $pid)"
+    exit 1
+  fi
+fi
+echo $$ > "$LOCKFILE"
+trap "rm -f $LOCKFILE" EXIT
 ```
 
 ## Documentation Standards

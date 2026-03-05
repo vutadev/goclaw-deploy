@@ -6,7 +6,7 @@ Complete breakdown of the goclaw-deploy repository structure, file purposes, and
 
 **Purpose:** Docker all-in-one packaging for GoClaw, a multi-LLM AI agent gateway platform.
 
-**Scope:** 12 files, ~802 LOC total, focused on deployment and containerization.
+**Scope:** 8 source files, ~1,039 LOC total, focused on deployment and containerization.
 
 **Key Technologies:**
 - Docker & Docker Compose (container orchestration)
@@ -88,7 +88,7 @@ Reverse proxy configuration serving React SPA and proxying API requests.
 Production composition: uses pre-built image from Docker Hub, no build step.
 
 **Services:**
-- **goclaw**: image `itsddvn/goclaw:v0.3.0-7-g53cd9ce` (pinned version)
+- **goclaw**: image `itsddvn/goclaw:v0.4.0-12-g231e112` (pinned version)
   - Managed mode with PostgreSQL DSN
   - 5 named volumes: data, workspace, skills, sessions, .goclaw dotdir
   - Port mapping: GOCLAW_PORT (default 3000) → 8080
@@ -97,9 +97,10 @@ Production composition: uses pre-built image from Docker Hub, no build step.
   - Health check dependency on postgres
 
 - **postgres**: image `pgvector/pgvector:pg18`
-  - Vector database with pgvector extension
+  - Vector database with pgvector extension (internal only)
   - Environment credentials from .env
   - Healthcheck: pg_isready
+  - Not exposed externally on port 5432
 
 **Volumes:** Named Docker volumes for data persistence.
 
@@ -167,23 +168,6 @@ Fully automated release workflow: sync upstream, review configs, build, push, sm
 - `sed_i()` — Platform-agnostic sed (macOS/Linux compatibility)
 - `escape_sed()` — Escapes special chars for sed substitution
 
-#### Makefile (53 LOC)
-High-level build targets for common operations.
-
-**Targets:**
-- `make build` — Multi-arch build (doesn't load locally, requires push)
-- `make build-local` — Single-arch build, loads into Docker
-- `make push` — Build and push multi-arch to Docker Hub
-- `make all` — Alias for push
-- `make version` — Show detected version from goclaw-core git tags
-- `make clean` — Remove local images
-
-**Variables:**
-- `GOCLAW_DIR` (default: ../goclaw-core) — Path to upstream source
-- `IMAGE` (default: itsddvn/goclaw) — Docker Hub image name
-- `VERSION` — From git describe --tags in GOCLAW_DIR
-- `PLATFORMS` (default: linux/amd64,linux/arm64) — Multi-arch platforms
-- `LOCAL_ARCH` — Auto-detect (linux/amd64 or linux/arm64)
 
 #### .env.example (35 LOC)
 Template for environment variables (copy to .env before running).

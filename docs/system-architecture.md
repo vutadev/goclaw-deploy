@@ -28,14 +28,14 @@ Complete overview of GoClaw Deploy architecture, component interactions, and dat
 │ │ - Multi-channel support (Telegram, Discord, etc.)    │   │
 │ │ - Session management                                 │   │
 │ └───────────────────┬───────────────────────────────────┘   │
-│                     │ postgres://                            │
+│                     │ postgres:// (internal only)            │
 │ ┌───────────────────▼───────────────────────────────────┐   │
 │ │ Process Management (entrypoint.sh)                    │   │
 │ │ - SIGTERM/SIGINT → graceful shutdown                 │   │
 │ │ - Monitors both processes                            │   │
 │ └───────────────────────────────────────────────────────┘   │
 └─────────────────────┬──────────────────────────────────────┘
-                      │ TCP:5432
+                      │ Docker network only
                       ▼
          ┌────────────────────────────┐
          │ PostgreSQL 18 + pgvector   │
@@ -43,6 +43,7 @@ Complete overview of GoClaw Deploy architecture, component interactions, and dat
          │ - Session store            │
          │ - Config & settings        │
          │ - Vector embeddings        │
+         │ (Not exposed externally)    │
          └────────────────────────────┘
 ```
 
@@ -425,7 +426,7 @@ Ready to serve requests
 ```
 docker compose up -d
     ↓
-Pull image: itsddvn/goclaw:v0.3.0-7-g53cd9ce
+Pull image: itsddvn/goclaw:v0.4.0-12-g231e112
     ↓
 Start container (pre-built, no compilation)
     ↓
@@ -433,6 +434,15 @@ Auto-migrate (if GOCLAW_MODE=managed)
     ↓
 Ready (~10s)
 ```
+
+**Sync workflow (release.sh):**
+1. Checkout main in goclaw-core
+2. Fetch upstream, merge upstream/main into fork/main
+3. Checkout develop, merge main into develop
+4. Auto-review config diffs (Dockerfile, nginx.conf)
+5. Clean containers, test build
+6. Build multi-arch, push to Docker Hub
+7. Update compose files, smoke test, commit
 
 **Advantage:** No build overhead, consistent image across regions.
 
@@ -496,9 +506,10 @@ Container network only exposes port 8080
     ↓
 Host port 3000 (docker compose mapping)
     ↓
-All internal services (goclaw:18790) only accessible from localhost
+All internal services (goclaw:18790) only accessible from localhost/docker network
     ↓
-Database (postgres:5432) only accessible from container or docker network
+Database (postgres:5432) only accessible from container via docker network
+    (NOT exposed externally on any port)
 ```
 
 ### Credential Management

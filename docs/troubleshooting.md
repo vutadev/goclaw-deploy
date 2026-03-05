@@ -123,7 +123,7 @@ Error response from daemon: pull access denied for itsddvn/goclaw, repository do
 
 Try pulling with retry:
 ```bash
-docker pull itsddvn/goclaw:v0.3.0-7-g53cd9ce
+docker pull itsddvn/goclaw:v0.4.0-12-g231e112
 # May take time, retry if network flaky
 ```
 
@@ -141,7 +141,7 @@ Check Docker Hub status:
 curl -s https://www.dockerstatus.com/ | grep -i status
 
 # Or try alternative registry (if mirrored)
-docker pull docker.io/itsddvn/goclaw:v0.3.0-7-g53cd9ce
+docker pull docker.io/itsddvn/goclaw:v0.4.0-12-g231e112
 ```
 
 ---
@@ -264,22 +264,17 @@ curl http://localhost:3000/health
 **Error:**
 ```
 docker compose logs postgres | head -30
-# Error about data directory or port
+# Error about data directory or startup
 ```
 
 **Cause:**
-- Port 5432 already in use
 - Corrupted data volume
 - Permission issues
+- Insufficient disk space
+
+**Note:** PostgreSQL is not exposed externally. It only runs within the Docker network and is only accessible from the goclaw container.
 
 **Solution:**
-
-Check port:
-```bash
-lsof -i :5432
-# Kill if needed
-kill -9 <PID>
-```
 
 Reset database (clears all data):
 ```bash

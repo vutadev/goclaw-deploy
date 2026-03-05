@@ -240,13 +240,28 @@ do_sync() {
   fi
 
   # ── CLEAN ─────────────────────────────────────────────────────────────
-  header "CLEAN — Remove old containers & volumes"
+  header "CLEAN — Prepare environment"
 
-  info "Stopping and removing project containers..."
-  docker compose -f "$DEPLOY_DIR/$COMPOSE_BUILD" down -v --remove-orphans 2>/dev/null || true
-  docker compose -f "$DEPLOY_DIR/$COMPOSE_PROD" down -v --remove-orphans 2>/dev/null || true
+  echo ""
+  echo -e "  ${CYAN}1)${NC} Rebuild code only — keep DB & volumes intact"
+  echo -e "  ${CYAN}2)${NC} Full reset — wipe DB, volumes & rebuild from scratch"
+  echo ""
+  read -r -p "$(echo -e "${YELLOW}? ${NC}Choose [1/2] (default: 2): ")" clean_choice
 
-  success "Cleaned"
+  case "${clean_choice:-2}" in
+    1)
+      info "Keeping existing data, stopping containers only..."
+      docker compose -f "$DEPLOY_DIR/$COMPOSE_BUILD" down --remove-orphans 2>/dev/null || true
+      docker compose -f "$DEPLOY_DIR/$COMPOSE_PROD" down --remove-orphans 2>/dev/null || true
+      success "Containers stopped (data preserved)"
+      ;;
+    *)
+      info "Stopping and removing containers + volumes..."
+      docker compose -f "$DEPLOY_DIR/$COMPOSE_BUILD" down -v --remove-orphans 2>/dev/null || true
+      docker compose -f "$DEPLOY_DIR/$COMPOSE_PROD" down -v --remove-orphans 2>/dev/null || true
+      success "Cleaned (fresh start)"
+      ;;
+  esac
 
   # ── TEST BUILD ────────────────────────────────────────────────────────
   header "TEST — Build from source & health check"
@@ -262,6 +277,23 @@ do_sync() {
   # Keep containers running for manual inspection
   COMPOSE_RUNNING=""
 
+  # ── PUSH SYNCED CODE ───────────────────────────────────────────────
+  header "PUSH — Push synced branches to fork"
+
+  info "Pushing main to origin..."
+  if ! git -C "$CORE_DIR" push origin main; then
+    warn "Failed to push main — you may need to push manually"
+  else
+    success "main pushed"
+  fi
+
+  info "Pushing develop to origin..."
+  if ! git -C "$CORE_DIR" push origin develop; then
+    warn "Failed to push develop — you may need to push manually"
+  else
+    success "develop pushed"
+  fi
+
   echo ""
   success "Sync complete! Containers are still running for inspection."
   info "Dashboard: http://localhost:3000"
@@ -274,11 +306,18 @@ do_sync() {
 # ═══════════════════════════════════════════════════════════════════════════
 do_publish() {
   # ── TAG ───────────────────────────────────────────────────────────────
-  header "TAG — Get version from goclaw-core"
+  header "TAG — Get version from upstream"
 
-  VERSION=$(git -C "$CORE_DIR" describe --tags 2>/dev/null) || {
-    error "Failed to get version from git tags."
-    error "Ensure tags are fetched: git -C $CORE_DIR fetch upstream --tags"
+  # Fetch latest tags from upstream
+  git -C "$CORE_DIR" fetch upstream --tags --quiet 2>/dev/null || {
+    error "Failed to fetch upstream tags."
+    error "Ensure upstream remote exists: git -C $CORE_DIR remote -v"
+    exit 1
+  }
+
+  VERSION=$(git -C "$CORE_DIR" describe --tags upstream/main 2>/dev/null) || {
+    error "Failed to get version from upstream tags."
+    error "Ensure upstream has tags: git -C $CORE_DIR ls-remote --tags upstream"
     exit 1
   }
 

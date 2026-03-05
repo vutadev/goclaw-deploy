@@ -20,11 +20,10 @@ Provide a production-grade, containerized packaging of GoClaw that enables seaml
 - nginx reverse proxy with WebSocket support
 - Comprehensive README and deployment documentation
 
-### In Progress (Q1 2026)
+### Completed (Q1 2026)
 - Documentation completion (codebase summary, architecture, code standards, troubleshooting)
-- Changelog generation and maintenance
-- FAQ and common issue resolution
-- Inline code comments for complex scripts
+- Release automation (release.sh fully functional)
+- Multi-architecture cross-compilation support
 
 ### Completed (Overall)
 | Milestone | Status | Completion |
@@ -33,7 +32,7 @@ Provide a production-grade, containerized packaging of GoClaw that enables seaml
 | Three compose variants | Complete | 100% |
 | Automated releases | Complete | 100% |
 | Security hardening | Complete | 100% |
-| Core documentation | Complete | 95% |
+| Core documentation | Complete | 100% |
 
 ---
 
@@ -75,25 +74,15 @@ Provide a production-grade, containerized packaging of GoClaw that enables seaml
 
 **Owner:** Technical Documentation
 
-#### Q2.3: Release Automation (GitHub Actions)
+#### Q2.3: Release Automation (Complete)
 **Goal:** Hands-off release pipeline.
 
-**Deliverables:**
-- GitHub Actions workflow:
-  - Run tests on PR
-  - Build & push image on merge to main
-  - Update compose files
-  - Create release notes
-  - Tag version automatically
-- Changelog auto-generation from commits
-- Release notes template
-
-**Success Metrics:**
-- Zero manual steps in release
-- Release time: < 5 minutes total
-- Changelog generated automatically
-
-**Owner:** DevOps Team
+**Status:** ✓ Complete (March 2026)
+- release.sh with sync + publish workflow
+- Upstream merge conflict detection
+- Config auto-review (Dockerfile, nginx.conf)
+- Health check automation
+- Multi-arch build support (linux/amd64)
 
 ---
 

@@ -9,7 +9,7 @@ Step-by-step instructions for deploying GoClaw using all three compose variants.
 - 2GB+ RAM available
 - 2GB+ disk space for image and volumes
 - Port 3000 (or custom GOCLAW_PORT) available
-- Port 5432 available (PostgreSQL)
+- PostgreSQL runs internally (no external port needed)
 
 ### Software Versions
 - Docker: 20.10+
@@ -121,7 +121,7 @@ docker compose up -d
 
 ```bash
 docker compose pull
-# Pulls: itsddvn/goclaw:v0.3.0-7-g53cd9ce
+# Pulls: itsddvn/goclaw:v0.4.0-12-g231e112
 #        pgvector/pgvector:pg18
 ```
 
@@ -204,7 +204,7 @@ docker compose logs goclaw --tail=50
 **PostgreSQL won't start:**
 ```bash
 docker compose logs postgres --tail=20
-# Common: port 5432 in use, insufficient disk
+# Common: corrupted data volume, insufficient disk
 ```
 
 ---
@@ -458,13 +458,26 @@ docker compose -f docker-compose-dokploy.yml ps
 
 **Production (docker-compose.yml):**
 
+Release workflow (release.sh):
 ```bash
-# Release maintainers run this:
-./release.sh full
+# In goclaw-deploy repo, release maintainers run:
+./release.sh sync       # Merge upstream main/develop
+./release.sh publish    # Build, push, update compose files
+# Or simply:
+./release.sh full       # Both sync and publish
 
-# Gets latest version, builds, pushes, commits
+# Workflow:
+# 1. Checkout main in goclaw-core, fetch upstream, merge upstream/main
+# 2. Checkout develop, merge main into develop
+# 3. Auto-review config diffs (Dockerfile, nginx.conf)
+# 4. Clean containers, test build
+# 5. Build multi-arch (linux/amd64), push to Docker Hub
+# 6. Update docker-compose.yml and docker-compose-dokploy.yml
+# 7. Smoke test, commit
+```
 
-# Then, to deploy updated version:
+Then deploy the updated version:
+```bash
 git pull
 docker compose pull
 docker compose up -d
@@ -487,17 +500,21 @@ docker compose -f docker-compose-build.yml up -d --build
 **If new version is broken:**
 
 ```bash
-# Edit compose file, change image tag
+# Edit compose file, change image tag to previous version
 nano docker-compose.yml
-# Change: image: itsddvn/goclaw:v0.3.0-7-g53cd9ce
-#     To: image: itsddvn/goclaw:v0.3.0-6-g<previous-hash>
+# Change: image: itsddvn/goclaw:v0.4.0-12-g231e112
+#     To: image: itsddvn/goclaw:v0.3.0-7-g53cd9ce
+#     (use any previous version tag)
 
 # Restart with old image
 docker compose pull
 docker compose up -d
 ```
 
-All volumes retained, no data loss.
+All volumes retained, no data loss. Check docker image history for available versions:
+```bash
+docker image history itsddvn/goclaw | grep TAG
+```
 
 ---
 
