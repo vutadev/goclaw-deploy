@@ -77,7 +77,7 @@ ENV GOCLAW_CONFIG=/app/config.json \
 
 USER goclaw
 
-EXPOSE 8080
+EXPOSE 8080 18790
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -qO- http://localhost:8080/health || exit 1

@@ -21,6 +21,7 @@ services:
         VERSION: ${GOCLAW_VERSION:-dev}
     ports:
       - "${GOCLAW_UI_PORT:-3000}:8080"
+      - "${GOCLAW_BACKEND_PORT:-18790}:18790"
     volumes:
       - goclaw-data:/app/data
       - goclaw-workspace:/app/workspace
