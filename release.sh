@@ -14,6 +14,17 @@ COMPOSE_DOKPLOY="docker-compose-dokploy.yml"
 LOCKFILE="/tmp/goclaw-release.lock"
 COMMAND="${1:-full}"
 
+# ── Auto mode ────────────────────────────────────────────────────────────
+AUTO=false
+for arg in "$@"; do
+  if [[ "$arg" == "--auto" ]]; then
+    AUTO=true
+  fi
+done
+if [[ "$COMMAND" == "--auto" ]]; then
+  COMMAND="${2:-full}"
+fi
+
 # ── Colors ──────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -35,6 +46,10 @@ header() {
 }
 
 confirm() {
+  if [[ "$AUTO" == true ]]; then
+    info "Auto-confirmed: $1"
+    return 0
+  fi
   echo ""
   read -r -p "$(echo -e "${YELLOW}? ${NC}$1 [Y/n] ")" answer
   case "${answer:-y}" in
@@ -129,12 +144,15 @@ fi
 
 # ── Usage ───────────────────────────────────────────────────────────────────
 usage() {
-  echo "Usage: ./release.sh [sync|publish|full]"
+  echo "Usage: ./release.sh [sync|publish|full] [--auto]"
   echo ""
   echo "Commands:"
   echo "  sync      Sync upstream, check changes, build & test locally"
   echo "  publish   Tag, build image, push to Docker Hub, smoke test, commit"
   echo "  full      Run everything (default)"
+  echo ""
+  echo "Flags:"
+  echo "  --auto    Non-interactive mode: auto-confirm prompts, keep data on clean, auto-push after commit"
   echo ""
 }
 
@@ -242,13 +260,19 @@ do_sync() {
   # ── CLEAN ─────────────────────────────────────────────────────────────
   header "CLEAN — Prepare environment"
 
-  echo ""
-  echo -e "  ${CYAN}1)${NC} Rebuild code only — keep DB & volumes intact"
-  echo -e "  ${CYAN}2)${NC} Full reset — wipe DB, volumes & rebuild from scratch"
-  echo ""
-  read -r -p "$(echo -e "${YELLOW}? ${NC}Choose [1/2] (default: 2): ")" clean_choice
+  if [[ "$AUTO" == true ]]; then
+    clean_choice=1
+    info "Auto-selected: keep data, stop containers only"
+  else
+    echo ""
+    echo -e "  ${CYAN}1)${NC} Rebuild code only — keep DB & volumes intact"
+    echo -e "  ${CYAN}2)${NC} Full reset — wipe DB, volumes & rebuild from scratch"
+    echo ""
+    read -r -p "$(echo -e "${YELLOW}? ${NC}Choose [1/2] (default: 2): ")" clean_choice
+    clean_choice="${clean_choice:-2}"
+  fi
 
-  case "${clean_choice:-2}" in
+  case "$clean_choice" in
     1)
       info "Keeping existing data, stopping containers only..."
       docker compose -f "$DEPLOY_DIR/$COMPOSE_BUILD" down --remove-orphans 2>/dev/null || true
@@ -420,9 +444,17 @@ do_publish() {
 
   success "Committed release ${VERSION}"
 
+  if [[ "$AUTO" == true ]]; then
+    info "Auto-pushing to origin main..."
+    git push origin main
+    success "Pushed to origin main"
+  fi
+
   echo ""
   header "Release ${VERSION} complete!"
-  info "Next: git push to deploy"
+  if [[ "$AUTO" != true ]]; then
+    info "Next: git push to deploy"
+  fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════════

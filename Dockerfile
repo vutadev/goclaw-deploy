@@ -8,7 +8,7 @@
 #   docker buildx build --build-context deploy=. -f Dockerfile -t itsddvn/goclaw ../goclaw
 
 # ── Stage 1: Build Go binary (cross-compile on build platform) ──
-FROM --platform=$BUILDPLATFORM golang:1.25-bookworm AS go-builder
+FROM --platform=$BUILDPLATFORM golang:1.26-bookworm AS go-builder
 
 ARG TARGETARCH
 WORKDIR /src
