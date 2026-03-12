@@ -8,7 +8,7 @@
 
 services:
   goclaw:
-    image: itsddvn/goclaw:v1.2.0-33-g7386fc8
+    image: itsddvn/goclaw:v1.4.2
     volumes:
       - goclaw-data:/app/data
       - goclaw-workspace:/app/workspace
