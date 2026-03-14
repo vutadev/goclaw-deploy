@@ -43,7 +43,7 @@ FROM alpine:3.22
 RUN apk add --no-cache ca-certificates wget nginx
 
 # Non-root user
-RUN addgroup -S goclaw && adduser -S -G goclaw goclaw
+RUN addgroup -S goclaw && adduser -S -G goclaw -h /app goclaw
 
 WORKDIR /app
 
