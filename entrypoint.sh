@@ -5,7 +5,7 @@ set -e
 # Docker volumes may initialize /app/data as root-owned.
 # Ensure goclaw user can read/write config, skills, and other data files.
 if [ "$(id -u)" = "0" ]; then
-  chown goclaw:goclaw /app/data 2>/dev/null || true
+  chown goclaw:goclaw /app/data /app/workspace 2>/dev/null || true
   # Fix ownership of existing files (config.json, skills, etc.) but not .runtime
   find /app/data -maxdepth 1 ! -name .runtime ! -name data -exec chown goclaw:goclaw {} \; 2>/dev/null || true
   chown -R goclaw:goclaw /app/data/skills 2>/dev/null || true
