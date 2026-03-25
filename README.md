@@ -69,40 +69,26 @@ All variants use PostgreSQL 18 with pgvector extension for vector storage (inter
 │  │  GoClaw backend (port 18790)                    │   │
 │  │  - Go binary with migrations                    │   │
 │  │  - Auto-upgrade on startup (managed mode)       │   │
+│  │  - Runs as goclaw user via su-exec              │   │
+│  └─────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │  pkg-helper (Unix socket /tmp/pkg.sock)         │   │
+│  │  - Root-privileged package installer            │   │
+│  │  - Handles apk installs for skills on-demand    │   │
+│  └─────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │  Full skills pre-installed                      │   │
+│  │  - Python + pip packages (pandas, anthropic...) │   │
+│  │  - Node.js + npm packages (docx, pptxgenjs)    │   │
+│  │  - pandoc, github-cli, poppler-utils, bash      │   │
 │  └─────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────┘
            ↓ (port 3000 mapped)
 ┌─────────────────────────────────────────────────────────┐
 │  PostgreSQL 18 + pgvector                               │
 │  - Vector database for embeddings                       │
-│  - User, sessions, config storage                       │
+│  - User, config, skills storage                         │
 └─────────────────────────────────────────────────────────┘
-```
-
-## Deployment Modes
-
-### Production (docker-compose.yml)
-Uses pre-built image from Docker Hub. Fastest startup, no build step required.
-
-```bash
-docker compose up -d
-# Dashboard: http://localhost:3000
-```
-
-### Development (docker-compose-build.yml)
-Builds from source (requires `../goclaw-core` sibling directory). Useful for testing changes.
-
-```bash
-docker compose -f docker-compose-build.yml up -d --build
-# Container rebuilds on every compose up --build
-```
-
-### Dokploy (docker-compose-dokploy.yml)
-Uses external Dokploy network. For PaaS platforms like Dokploy that provide DNS & reverse proxy.
-
-```bash
-docker compose -f docker-compose-dokploy.yml up -d
-# Services connect via dokploy-network
 ```
 
 ## Release Workflow
@@ -114,16 +100,6 @@ Automated release process via `release.sh`:
 ./release.sh publish    # Tag, build, push to Docker Hub, smoke test
 ./release.sh full       # sync + publish (default)
 ```
-
-Steps:
-1. Fetch from upstream (goclaw-core)
-2. Merge upstream/main → fork/main → fork/develop
-3. Auto-review config diffs (Dockerfile, nginx.conf)
-4. Build & test locally
-5. Tag version from git
-6. Build multi-arch (linux/amd64) and push to Docker Hub
-7. Smoke test with pulled image
-8. Commit compose file updates
 
 ## Environment Variables
 
@@ -166,8 +142,8 @@ POSTGRES_DB=goclaw               # Default
 
 ### Ports
 ```
-GOCLAW_UI_PORT=3000              # External port (maps to 8080 in container)
-GOCLAW_PORT=18790                # Internal backend port (do not change)
+GOCLAW_PORT=3000                 # External port (maps to 8080 in container)
+GOCLAW_BACKEND_PORT=18790        # Backend port (build mode only)
 ```
 
 ## Troubleshooting
@@ -199,9 +175,6 @@ For local build variant:
 # Ensure goclaw-core exists
 ls -la ../goclaw-core
 
-# Check Docker buildx availability
-docker buildx version
-
 # Rebuild (clears build cache)
 docker compose -f docker-compose-build.yml up -d --build --no-cache
 ```
@@ -210,9 +183,10 @@ docker compose -f docker-compose-build.yml up -d --build --no-cache
 
 | File | Purpose |
 |---|---|
-| `Dockerfile` | 3-stage: Go build → React build → Alpine runtime |
-| `entrypoint.sh` | Container startup: auto-migrate, start goclaw & nginx |
-| `nginx.conf` | Reverse proxy config: /v1/ API, /ws WebSocket, SPA static |
+| `Dockerfile` | 3-stage: Go build → React build → Alpine runtime (full skills) |
+| `entrypoint.sh` | Startup: pkg-helper, su-exec privilege drop, auto-migrate, goclaw + nginx |
+| `nginx.conf` | Reverse proxy: /v1/ API, /ws WebSocket, SPA static, security headers |
+| `nginx-main.conf` | Main nginx config with tmpfs writable paths |
 | `docker-compose.yml` | Production: uses pre-built image |
 | `docker-compose-build.yml` | Development: builds from source |
 | `docker-compose-dokploy.yml` | Dokploy: external network config |
@@ -220,8 +194,10 @@ docker compose -f docker-compose-build.yml up -d --build --no-cache
 
 ## Security
 
-- Non-root user (`goclaw`) inside container
-- No new privileges, all capabilities dropped
+- Entrypoint runs as root only for package persistence and pkg-helper, then drops to `goclaw` user via `su-exec`
+- `no-new-privileges` security option enabled
+- All capabilities dropped except `SETUID`, `SETGID`, `CHOWN` (required for su-exec privilege drop)
+- `init: true` for proper signal handling and zombie reaping
 - `/tmp` mounted noexec for exploit prevention
 - Resource limits: 1GB RAM, 2 CPU, 200 PIDs
 - Request body limit: 10MB for LLM chat payloads

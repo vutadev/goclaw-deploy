@@ -13,9 +13,6 @@ services:
     volumes:
       - goclaw-data:/app/data
       - goclaw-workspace:/app/workspace
-      - goclaw-skills:/app/skills
-      - goclaw-sessions:/app/sessions
-      - goclaw-dotdir:/app/.goclaw
     ports:
       - "${GOCLAW_PORT:-3000}:8080"
     env_file:
@@ -24,15 +21,20 @@ services:
     environment:
       GOCLAW_CONFIG: /app/data/config.json
       GOCLAW_MODE: managed
+      GOCLAW_SKILLS_DIR: /app/data/skills
       GOCLAW_POSTGRES_DSN: postgres://${POSTGRES_USER:-goclaw}:${POSTGRES_PASSWORD:-goclaw}@postgres:5432/${POSTGRES_DB:-goclaw}?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy
     security_opt:
       - no-new-privileges:true
+    init: true
     cap_drop:
       - ALL
-    read_only: true
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=256m
     deploy:
@@ -52,7 +54,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-goclaw}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-goclaw} -d ${POSTGRES_DB:-goclaw}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -77,8 +79,5 @@ services:
 volumes:
   goclaw-data:
   goclaw-workspace:
-  goclaw-skills:
-  goclaw-sessions:
-  goclaw-dotdir:
   pgdata:
   pgadmin-data:

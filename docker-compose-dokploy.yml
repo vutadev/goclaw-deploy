@@ -1,11 +1,9 @@
-# GoClaw All-in-One — Managed mode (PostgreSQL + pgvector + Web Dashboard + pgAdmin)
+# GoClaw All-in-One — Dokploy mode (PostgreSQL + pgvector + Web Dashboard + pgAdmin)
 #
 # Usage:
-#   docker compose up -d
+#   docker compose -f docker-compose-dokploy.yml up -d
 #
-# Dashboard: http://localhost:3000
-# API:       http://localhost:3000/v1/
-# pgAdmin:   Accessible via Dokploy proxy (configure in Dokploy dashboard)
+# Dashboard: Accessible via Dokploy proxy (configure in Dokploy dashboard)
 
 services:
   goclaw:
@@ -13,15 +11,13 @@ services:
     volumes:
       - goclaw-data:/app/data
       - goclaw-workspace:/app/workspace
-      - goclaw-skills:/app/skills
-      - goclaw-sessions:/app/sessions
-      - goclaw-dotdir:/app/.goclaw
     env_file:
       - path: .env
         required: false
     environment:
       GOCLAW_CONFIG: /app/data/config.json
       GOCLAW_MODE: managed
+      GOCLAW_SKILLS_DIR: /app/data/skills
       GOCLAW_POSTGRES_DSN: postgres://${POSTGRES_USER:-goclaw}:${POSTGRES_PASSWORD:-goclaw}@postgres:5432/${POSTGRES_DB:-goclaw}?sslmode=disable
     depends_on:
       postgres:
@@ -30,9 +26,13 @@ services:
       - dokploy-network
     security_opt:
       - no-new-privileges:true
+    init: true
     cap_drop:
       - ALL
-    read_only: true
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=256m
     deploy:
@@ -54,7 +54,7 @@ services:
     networks:
       - dokploy-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-goclaw}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-goclaw} -d ${POSTGRES_DB:-goclaw}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -83,8 +83,5 @@ networks:
 volumes:
   goclaw-data:
   goclaw-workspace:
-  goclaw-skills:
-  goclaw-sessions:
-  goclaw-dotdir:
   pgdata:
   pgadmin-data:
