@@ -9,8 +9,8 @@ services:
   goclaw:
     image: itsddvn/goclaw:lite-v0.1.0
     volumes:
-      - goclaw-data:/app/data
-      - goclaw-workspace:/app/workspace
+      - ${GOCLAW_DATA_VOLUME:-goclaw-data}:/app/data
+      - ${GOCLAW_WORKSPACE_VOLUME:-goclaw-workspace}:/app/workspace
     env_file:
       - path: .env
         required: false
