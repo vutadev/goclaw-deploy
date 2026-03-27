@@ -53,7 +53,7 @@ RUN apk add --no-cache \
     rm -rf /tmp/npm-cache /root/.cache /var/cache/apk/*
 
 # Non-root user
-RUN addgroup -S goclaw && adduser -S -G goclaw goclaw
+RUN addgroup -S goclaw && adduser -S -G goclaw -h /app goclaw
 
 WORKDIR /app
 
