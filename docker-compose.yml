@@ -9,7 +9,7 @@
 
 services:
   goclaw:
-    image: itsddvn/goclaw:lite-v0.6.0
+    image: itsddvn/goclaw:v2.42.2
     volumes:
       - goclaw-data:/app/data
       - goclaw-workspace:/app/workspace
