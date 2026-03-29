@@ -14,14 +14,17 @@ COMPOSE_DOKPLOY="docker-compose-dokploy.yml"
 LOCKFILE="/tmp/goclaw-release.lock"
 COMMAND="${1:-full}"
 
-# ── Auto mode ────────────────────────────────────────────────────────────
+# ── Auto mode & custom version ──────────────────────────────────────────
 AUTO=false
+CUSTOM_VERSION=""
 for arg in "$@"; do
-  if [[ "$arg" == "--auto" ]]; then
+  if [[ "$arg" == "--auto" ]] || [[ "$arg" == "-auto" ]]; then
     AUTO=true
+  elif [[ "$arg" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+    CUSTOM_VERSION="$arg"
   fi
 done
-if [[ "$COMMAND" == "--auto" ]]; then
+if [[ "$COMMAND" == "--auto" ]] || [[ "$COMMAND" == "-auto" ]]; then
   COMMAND="${2:-full}"
 fi
 
@@ -144,7 +147,7 @@ fi
 
 # ── Usage ───────────────────────────────────────────────────────────────────
 usage() {
-  echo "Usage: ./release.sh [sync|publish|full] [--auto]"
+  echo "Usage: ./release.sh [sync|publish|full] [--auto] [vX.Y.Z]"
   echo ""
   echo "Commands:"
   echo "  sync      Sync upstream, check changes, build & test locally"
@@ -153,6 +156,11 @@ usage() {
   echo ""
   echo "Flags:"
   echo "  --auto    Non-interactive mode: auto-confirm prompts, keep data on clean, auto-push after commit"
+  echo "  vX.Y.Z    Custom version tag (e.g., v2.42.2-fx01) - overrides auto-detection"
+  echo ""
+  echo "Examples:"
+  echo "  ./release.sh full --auto                    # Auto-release with detected version"
+  echo "  ./release.sh publish --auto v2.42.2-fx01    # Custom version for hotfix"
   echo ""
 }
 
@@ -332,31 +340,36 @@ do_publish() {
   # ── TAG ───────────────────────────────────────────────────────────────
   header "TAG — Get version from upstream"
 
-  # Fetch latest tags from upstream
-  git -C "$CORE_DIR" fetch upstream --tags --quiet 2>/dev/null || {
-    error "Failed to fetch upstream tags."
-    error "Ensure upstream remote exists: git -C $CORE_DIR remote -v"
-    exit 1
-  }
+  if [[ -n "$CUSTOM_VERSION" ]]; then
+    VERSION="$CUSTOM_VERSION"
+    info "Using custom version: ${CYAN}${VERSION}${NC}"
+  else
+    # Fetch latest tags from upstream
+    git -C "$CORE_DIR" fetch upstream --tags --quiet 2>/dev/null || {
+      error "Failed to fetch upstream tags."
+      error "Ensure upstream remote exists: git -C $CORE_DIR remote -v"
+      exit 1
+    }
 
-  VERSION=$(git -C "$CORE_DIR" describe --tags upstream/main 2>/dev/null) || {
-    error "Failed to get version from upstream tags."
-    error "Ensure upstream has tags: git -C $CORE_DIR ls-remote --tags upstream"
-    exit 1
-  }
+    VERSION=$(git -C "$CORE_DIR" describe --tags --match "v*" upstream/main 2>/dev/null) || {
+      error "Failed to get version from upstream tags."
+      error "Ensure upstream has v* tags: git -C $CORE_DIR ls-remote --tags upstream"
+      exit 1
+    }
 
-  if [[ -z "$VERSION" ]]; then
-    error "Empty version string. No tags in repo?"
-    exit 1
+    if [[ -z "$VERSION" ]]; then
+      error "Empty version string. No tags in repo?"
+      exit 1
+    fi
+
+    if [[ "$VERSION" == *"dirty"* ]]; then
+      error "Working tree is dirty: '$VERSION'"
+      error "Commit or stash changes in $CORE_DIR first."
+      exit 1
+    fi
+
+    info "Detected version: ${CYAN}${VERSION}${NC}"
   fi
-
-  if [[ "$VERSION" == *"dirty"* ]]; then
-    error "Working tree is dirty: '$VERSION'"
-    error "Commit or stash changes in $CORE_DIR first."
-    exit 1
-  fi
-
-  info "Detected version: ${CYAN}${VERSION}${NC}"
 
   # ── BUILD + PUSH ──────────────────────────────────────────────────────
   header "BUILD — Build & push to Docker Hub"
