@@ -1,25 +1,29 @@
 #!/bin/sh
 set -e
 
-# ── Data directory ownership ──
-# Docker volumes may initialize /app/data as root-owned.
-# Ensure goclaw user can read/write config, skills, and other data files.
+# ── Fix volume ownership (root context only) ──
+# Docker named volumes may initialize as root-owned.
+# Ensure goclaw user owns all writable directories.
 if [ "$(id -u)" = "0" ]; then
-  chown goclaw:goclaw /app/data 2>/dev/null || true
-
-  # Fix workspace ownership recursively
-  chown -R goclaw:goclaw /app/workspace 2>/dev/null || true
-
-  # Pre-create workspace subdirectories with proper ownership
-  mkdir -p /app/workspace/teams 2>/dev/null || true
-  chown -R goclaw:goclaw /app/workspace/teams 2>/dev/null || true
-
-  # Ensure workspace root is writable
+  # Workspace volume — must be fully writable by goclaw for teams, uploads, etc.
+  # CRITICAL: Fix ownership BEFORE creating subdirectories
+  chown -R goclaw:goclaw /app/workspace || echo "Warning: workspace chown failed (may already be correct)"
+  # chmod on volume mount points may fail due to filesystem restrictions
   chmod 755 /app/workspace 2>/dev/null || true
+  # Create teams directory - suppress error if it fails (will retry as goclaw user)
+  mkdir -p /app/workspace/teams 2>/dev/null || su-exec goclaw mkdir -p /app/workspace/teams
+  chmod 755 /app/workspace/teams 2>/dev/null || true
 
-  # Fix ownership of existing files (config.json, skills, etc.) but not .runtime
+  # Data volume — goclaw owns root and direct children (except .runtime)
+  chown goclaw:goclaw /app/data || echo "Warning: data chown failed (may already be correct)"
   find /app/data -maxdepth 1 ! -name .runtime ! -name data -exec chown goclaw:goclaw {} \; 2>/dev/null || true
   chown -R goclaw:goclaw /app/data/skills 2>/dev/null || true
+
+  # Agent workspace directory
+  chown -R goclaw:goclaw /app/.goclaw 2>/dev/null || true
+
+  # Skills-store home — binary writes to /home/goclaw/.goclaw/skills-store/
+  mkdir -p /home/goclaw/.goclaw && chown -R goclaw:goclaw /home/goclaw
 fi
 
 # ── Runtime directory setup ──

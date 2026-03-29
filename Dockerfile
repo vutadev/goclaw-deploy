@@ -55,6 +55,9 @@ RUN apk add --no-cache \
 # Non-root user
 RUN addgroup -S goclaw && adduser -S -G goclaw -h /app goclaw
 
+# Skills-store home directory (binary resolves to /home/goclaw/.goclaw)
+RUN mkdir -p /home/goclaw/.goclaw && chown -R goclaw:goclaw /home/goclaw
+
 WORKDIR /app
 
 # Copy Go binaries, migrations, and bundled skills
