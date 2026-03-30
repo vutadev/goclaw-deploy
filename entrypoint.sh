@@ -5,14 +5,19 @@ set -e
 # Docker named volumes may initialize as root-owned.
 # Ensure goclaw user owns all writable directories.
 if [ "$(id -u)" = "0" ]; then
-  # Workspace volume — must be fully writable by goclaw for teams, uploads, etc.
-  # CRITICAL: Create subdirectories FIRST, then fix ownership of everything including newly created dirs
+  # Workspace volume — create teams dir if missing
+  # Skip chown (fails on bind mounts), ensure writable via chmod instead
   mkdir -p /app/workspace/teams
-  # Fix ownership AFTER all directories exist (catches both old + new)
-  chown -R goclaw:goclaw /app/workspace || echo "Warning: workspace chown failed (may already be correct)"
-  # Ensure correct permissions on mount points
+
+  # Check if goclaw can write, if not use chmod g+w
+  if ! su-exec goclaw test -w /app/workspace/teams 2>/dev/null; then
+    echo "Note: Fixing permissions for /app/workspace/teams"
+    chmod -R g+w /app/workspace/teams 2>/dev/null || true
+    chmod g+s /app/workspace/teams 2>/dev/null || true  # SetGID for new files
+  fi
+
+  # Ensure readable/executable by all
   chmod 755 /app/workspace 2>/dev/null || true
-  chmod 755 /app/workspace/teams 2>/dev/null || true
 
   # Data volume — goclaw owns root and direct children (except .runtime)
   chown goclaw:goclaw /app/data || echo "Warning: data chown failed (may already be correct)"
