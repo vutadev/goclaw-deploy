@@ -18,35 +18,36 @@ error="mkdir /app/workspace/teams/019cc229-3cf1-74c0-b2d1-fd5c7a36b7bb: permissi
 
 1. Docker volumes (`goclaw-workspace:/app/workspace`) may be initialized with root ownership
 2. The application runs as `goclaw` user (non-root for security)
-3. The entrypoint script was fixing `/app/workspace` ownership but not pre-creating subdirectories
+3. **SEQUENCING BUG:** Previous fix (commit `44b59a9`) ran operations in wrong order:
+   - Line 10: `chown -R goclaw:goclaw /app/workspace` (fixes EXISTING files only)
+   - Line 14: `mkdir -p /app/workspace/teams` (creates NEW directory as root!)
+   - Result: `/app/workspace/teams` remained `root:root` owned
 4. When the app tried to create `/app/workspace/teams/<team-id>/`, it lacked permissions
 
 ## Solution
 
-Enhanced `entrypoint.sh` to:
-1. Fix workspace ownership recursively
-2. Pre-create `/app/workspace/teams` directory with proper ownership
-3. Ensure workspace root has correct permissions (755)
+Fixed operation order in `entrypoint.sh`:
+1. **Create directories FIRST** (as root while we still have permission)
+2. **Fix ownership AFTER** (recursive chown catches newly created directories)
+3. Ensure correct permissions on mount points
 
 ### Changes Made
 
-**File:** `entrypoint.sh` (lines 4-18)
+**File:** `entrypoint.sh` (lines 7-15)
 
 ```diff
  if [ "$(id -u)" = "0" ]; then
-   chown goclaw:goclaw /app/data 2>/dev/null || true
-+
-+  # Fix workspace ownership recursively
-   chown -R goclaw:goclaw /app/workspace 2>/dev/null || true
-+
-+  # Pre-create workspace subdirectories with proper ownership
-+  mkdir -p /app/workspace/teams 2>/dev/null || true
-+  chown -R goclaw:goclaw /app/workspace/teams 2>/dev/null || true
-+
-+  # Ensure workspace root is writable
+-  # CRITICAL: Fix ownership BEFORE creating subdirectories
+-  chown -R goclaw:goclaw /app/workspace || echo "Warning: workspace chown failed"
+-  chmod 755 /app/workspace 2>/dev/null || true
+-  mkdir -p /app/workspace/teams 2>/dev/null || su-exec goclaw mkdir -p /app/workspace/teams
++  # CRITICAL: Create subdirectories FIRST, then fix ownership of everything
++  mkdir -p /app/workspace/teams
++  # Fix ownership AFTER all directories exist (catches both old + new)
++  chown -R goclaw:goclaw /app/workspace || echo "Warning: workspace chown failed"
++  # Ensure correct permissions on mount points
 +  chmod 755 /app/workspace 2>/dev/null || true
-+
-   # Fix ownership of existing files (config.json, skills, etc.) but not .runtime
+   chmod 755 /app/workspace/teams 2>/dev/null || true
 ```
 
 ## Testing Instructions
@@ -129,11 +130,12 @@ This fix also prevents similar permission errors for:
 
 - [x] Shell script syntax validated
 - [x] Git diff reviewed
-- [ ] Local build tested
+- [x] Local build tested
+- [x] Container ownership verified (`goclaw:goclaw` for `/app/workspace/teams`)
+- [x] No permission errors in logs
 - [ ] Production image built and tagged
 - [ ] Deployed to test environment
-- [ ] Agent team creation verified
-- [ ] No permission errors in logs
+- [ ] Image upload to agent tested (real-world verification)
 
 ## Rollback Plan
 

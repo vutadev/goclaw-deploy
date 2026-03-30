@@ -6,12 +6,12 @@ set -e
 # Ensure goclaw user owns all writable directories.
 if [ "$(id -u)" = "0" ]; then
   # Workspace volume — must be fully writable by goclaw for teams, uploads, etc.
-  # CRITICAL: Fix ownership BEFORE creating subdirectories
+  # CRITICAL: Create subdirectories FIRST, then fix ownership of everything including newly created dirs
+  mkdir -p /app/workspace/teams
+  # Fix ownership AFTER all directories exist (catches both old + new)
   chown -R goclaw:goclaw /app/workspace || echo "Warning: workspace chown failed (may already be correct)"
-  # chmod on volume mount points may fail due to filesystem restrictions
+  # Ensure correct permissions on mount points
   chmod 755 /app/workspace 2>/dev/null || true
-  # Create teams directory - suppress error if it fails (will retry as goclaw user)
-  mkdir -p /app/workspace/teams 2>/dev/null || su-exec goclaw mkdir -p /app/workspace/teams
   chmod 755 /app/workspace/teams 2>/dev/null || true
 
   # Data volume — goclaw owns root and direct children (except .runtime)
