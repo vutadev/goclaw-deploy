@@ -114,7 +114,12 @@ case "${1:-serve}" in
         fi
 
         # Start goclaw (as goclaw user)
-        exec run_as_goclaw /app/goclaw
+        # Note: cannot use exec with shell function, use su-exec directly
+        if command -v su-exec >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
+            exec su-exec goclaw /app/goclaw
+        else
+            exec /app/goclaw
+        fi
         ;;
     upgrade)
         shift
