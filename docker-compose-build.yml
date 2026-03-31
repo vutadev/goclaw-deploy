@@ -8,8 +8,8 @@
 #   make build-local
 #   docker compose -f docker-compose-build.yml up -d
 #
-# Dashboard: http://localhost:3000
-# API:       http://localhost:3000/v1/
+# Dashboard: http://localhost (or https://<domain> if GOCLAW_DOMAIN is set)
+# API:       http://localhost/v1/
 # pgAdmin:   http://localhost:5050
 
 services:
@@ -17,10 +17,12 @@ services:
     platform: linux/amd64
     image: ${GOCLAW_IMAGE:-itsddvn/goclaw}:${GOCLAW_VERSION:-latest}
     ports:
-      - "${GOCLAW_HOST_PORT:-3000}:8080"
+      - "${GOCLAW_HTTP_PORT:-80}:8080"
+      - "${GOCLAW_HTTPS_PORT:-443}:8443"
     volumes:
       - goclaw-data:/app/data
       - goclaw-workspace:/app/workspace
+      - caddy-data:/data
     env_file:
       - path: .env
         required: false
@@ -29,6 +31,7 @@ services:
       GOCLAW_MODE: managed
       GOCLAW_SKILLS_DIR: /app/data/skills
       GOCLAW_POSTGRES_DSN: postgres://${POSTGRES_USER:-goclaw}:${POSTGRES_PASSWORD:-goclaw}@postgres:5432/${POSTGRES_DB:-goclaw}?sslmode=disable
+      GOCLAW_DOMAIN: ${GOCLAW_DOMAIN:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -85,5 +88,6 @@ services:
 volumes:
   goclaw-data:
   goclaw-workspace:
+  caddy-data:
   pgdata:
   pgadmin-data:
