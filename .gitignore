@@ -3,3 +3,5 @@ config.json
 plans
 .pi
 .omc
+.playwright-cli
+screenshots

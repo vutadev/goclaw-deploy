@@ -1,10 +1,12 @@
 # GoClaw All-in-One — Local build mode (build from source + pgAdmin)
 #
 # Prerequisites:
-#   goclaw-core is included as a git submodule
+#   1. goclaw-core is included as a git submodule
+#   2. Build core image first: make build-local
 #
 # Usage:
-#   docker compose -f docker-compose-build.yml up -d --build
+#   make build-local
+#   docker compose -f docker-compose-build.yml up -d
 #
 # Dashboard: http://localhost:3000
 # API:       http://localhost:3000/v1/
@@ -13,15 +15,9 @@
 services:
   goclaw:
     platform: linux/amd64
-    build:
-      context: ./goclaw-core
-      dockerfile: ${PWD}/Dockerfile
-      additional_contexts:
-        deploy: .
-      args:
-        VERSION: ${GOCLAW_VERSION:-dev}
+    image: ${GOCLAW_IMAGE:-itsddvn/goclaw}:${GOCLAW_VERSION:-latest}
     ports:
-      - "${GOCLAW_HOST_PORT:-3000}:18790"
+      - "${GOCLAW_HOST_PORT:-3000}:8080"
     volumes:
       - goclaw-data:/app/data
       - goclaw-workspace:/app/workspace

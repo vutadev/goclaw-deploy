@@ -14,7 +14,7 @@ services:
       - goclaw-data:/app/data
       - goclaw-workspace:/app/workspace
     ports:
-      - "${GOCLAW_HOST_PORT:-3000}:18790"
+      - "${GOCLAW_HOST_PORT:-3000}:8080"
     env_file:
       - path: .env
         required: false
