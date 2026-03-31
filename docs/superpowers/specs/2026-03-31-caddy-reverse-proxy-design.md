@@ -38,22 +38,26 @@ Host:3000 → Container:8080 (nginx)
 
 **HTTP mode (no domain):**
 ```
-Host:{GOCLAW_HTTP_PORT:-80} → Container:80 (Caddy)
+Host:{GOCLAW_HTTP_PORT:-80} → Container:8080 (Caddy)
                               ├→ /v1/*    → 127.0.0.1:18790 (API)
-                              ├→ /ws      → 127.0.0.1:18790 (WebSocket)
+                              ├→ /ws      → 127.0.0.1:18790 (WebSocket, 24h timeout)
                               ├→ /health  → 127.0.0.1:18790 (Health)
-                              └→ /*       → Static SPA files
+                              └→ /*       → Static SPA files (/app/dist)
 ```
 
 **HTTPS mode (with domain):**
 ```
-Host:{GOCLAW_HTTP_PORT:-80}  → Container:80  (Caddy, redirect → 443)
-Host:{GOCLAW_HTTPS_PORT:-443} → Container:443 (Caddy, auto TLS)
+Host:{GOCLAW_HTTP_PORT:-80}   → Container:8080 (Caddy, redirect → HTTPS)
+Host:{GOCLAW_HTTPS_PORT:-443} → Container:8443 (Caddy, auto TLS)
                                 ├→ /v1/*    → 127.0.0.1:18790 (API)
-                                ├→ /ws      → 127.0.0.1:18790 (WebSocket)
+                                ├→ /ws      → 127.0.0.1:18790 (WebSocket, 24h timeout)
                                 ├→ /health  → 127.0.0.1:18790 (Health)
-                                └→ /*       → Static SPA files
+                                └→ /*       → Static SPA files (/app/dist)
 ```
+
+> **Note:** Caddy listens on high ports (8080/8443) inside the container to avoid
+> needing `NET_BIND_SERVICE` capability, preserving `no-new-privileges:true`.
+> Docker port mapping translates host ports 80/443 → container 8080/8443.
 
 ## Approach
 
@@ -73,16 +77,24 @@ Host:{GOCLAW_HTTPS_PORT:-443} → Container:443 (Caddy, auto TLS)
 **`Caddyfile.http`** — HTTP-only mode (behind proxy or local dev):
 
 ```caddyfile
-:80 {
+:8080 {
     root * /app/dist
     encode gzip
+
+    request_body {
+        max_size 50MB
+    }
 
     handle /v1/* {
         reverse_proxy 127.0.0.1:18790
     }
 
     handle /ws {
-        reverse_proxy 127.0.0.1:18790
+        reverse_proxy 127.0.0.1:18790 {
+            transport http {
+                read_timeout 86400s
+            }
+        }
     }
 
     handle /health {
@@ -106,16 +118,30 @@ Host:{GOCLAW_HTTPS_PORT:-443} → Container:443 (Caddy, auto TLS)
 **`Caddyfile.https`** — Auto HTTPS mode with domain:
 
 ```caddyfile
+{
+    http_port 8080
+    https_port 8443
+    storage file_system /data
+}
+
 ${GOCLAW_DOMAIN} {
     root * /app/dist
     encode gzip
+
+    request_body {
+        max_size 50MB
+    }
 
     handle /v1/* {
         reverse_proxy 127.0.0.1:18790
     }
 
     handle /ws {
-        reverse_proxy 127.0.0.1:18790
+        reverse_proxy 127.0.0.1:18790 {
+            transport http {
+                read_timeout 86400s
+            }
+        }
     }
 
     handle /health {
@@ -141,43 +167,78 @@ ${GOCLAW_DOMAIN} {
 - Security headers (X-Content-Type-Options, X-Frame-Options, Referrer-Policy)
 - 1-year cache for `/assets/*` (Vite hashed filenames)
 - SPA fallback (`try_files`)
-- WebSocket proxy (`/ws`)
-- Caddy handles max request body via `request_body` directive (50MB)
+- WebSocket proxy (`/ws`) with 24-hour read timeout (matches nginx `proxy_read_timeout 86400s`)
+- Max request body 50MB (matches nginx `client_max_body_size 50m`)
+
+**Behavioral notes:**
+- Caddy's `reverse_proxy` automatically sets `X-Real-IP`, `X-Forwarded-For`, `Host` headers (matching current nginx config)
+- Caddy's `encode gzip` compresses all compressible MIME types by default (nginx config specified explicit types — Caddy's default is a superset)
+- Caddy logs to stderr by default, which Docker captures — no separate log files needed (nginx wrote to `/tmp/nginx/`)
+- In HTTPS mode, Caddy automatically redirects HTTP → HTTPS. Port 80 must be publicly accessible for ACME HTTP-01 challenges
 
 ### 2. Entrypoint Changes
 
-In `entrypoint.sh`, replace nginx startup with Caddy:
+Full replacement of nginx-related code in `entrypoint.sh`:
 
+**Remove:**
+- nginx temp directory creation (`mkdir -p /tmp/nginx/client_body ...`)
+- nginx startup line (`nginx -c /app/nginx-main.conf &`)
+- All `NGINX_PID` references
+
+**Add to root init block** (after existing volume ownership fixes):
+```bash
+# Fix caddy data volume ownership
+chown goclaw:goclaw /data 2>/dev/null || true
+```
+
+**Replace nginx startup with Caddy** (in `serve` case):
 ```bash
 # Select Caddyfile based on GOCLAW_DOMAIN
 if [ -n "$GOCLAW_DOMAIN" ]; then
-    cp /app/Caddyfile.https /app/Caddyfile
-    sed -i "s/\${GOCLAW_DOMAIN}/$GOCLAW_DOMAIN/g" /app/Caddyfile
+    envsubst '$GOCLAW_DOMAIN' < /app/Caddyfile.https > /tmp/Caddyfile
 else
-    cp /app/Caddyfile.http /app/Caddyfile
+    cp /app/Caddyfile.http /tmp/Caddyfile
 fi
 
-# Start Caddy (non-root, requires NET_BIND_SERVICE capability)
-caddy run --config /app/Caddyfile --adapter caddyfile &
+# Start Caddy (high ports, no special capabilities needed)
+caddy run --config /tmp/Caddyfile --adapter caddyfile &
 CADDY_PID=$!
 ```
 
-Process monitoring remains the same — watch both Caddy PID and goclaw PID, exit on either failure.
+> Uses `envsubst` instead of `sed` to avoid issues with special characters in domain names.
+
+**Update `shutdown()` function:**
+```bash
+shutdown() {
+    kill "$GOCLAW_PID" "$CADDY_PID" 2>/dev/null
+    wait "$GOCLAW_PID" "$CADDY_PID" 2>/dev/null
+}
+```
+
+**Update process monitor `while` loop:**
+```bash
+while kill -0 "$GOCLAW_PID" 2>/dev/null && kill -0 "$CADDY_PID" 2>/dev/null; do
+    sleep 1
+done
+```
 
 ### 3. Dockerfile Changes
 
 ```dockerfile
 # Replace: apk add nginx
-# With:    apk add caddy
+# With:    apk add caddy gettext-envsubst
+
+# Change static files destination (was /usr/share/nginx/html)
+COPY --from=webbuilder /app/dist /app/dist
 
 # Remove: COPY nginx.conf nginx-main.conf
 # Add:    COPY Caddyfile.http Caddyfile.https /app/
 
-# Change exposed ports
-EXPOSE 80 443
+# Change exposed ports (high ports, no root needed)
+EXPOSE 8080 8443
 
 # Update healthcheck
-HEALTHCHECK CMD wget -qO- http://localhost:80/health
+HEALTHCHECK CMD wget -qO- http://localhost:8080/health
 ```
 
 ### 4. Docker Compose Changes
@@ -188,26 +249,26 @@ HEALTHCHECK CMD wget -qO- http://localhost:80/health
 services:
   goclaw:
     ports:
-      - "${GOCLAW_HTTP_PORT:-80}:80"
-      - "${GOCLAW_HTTPS_PORT:-443}:443"
+      - "${GOCLAW_HTTP_PORT:-80}:8080"
+      - "${GOCLAW_HTTPS_PORT:-443}:8443"
     volumes:
       - caddy-data:/data
       # ... existing volumes unchanged
     environment:
       - GOCLAW_DOMAIN=${GOCLAW_DOMAIN:-}
       # ... existing env unchanged
-    cap_add:
-      - SETUID
-      - SETGID
-      - CHOWN
-      - NET_BIND_SERVICE  # New: allows Caddy to bind 80/443 as non-root
+    # No new capabilities needed — Caddy uses high ports (8080/8443)
+    # Existing cap_add (SETUID, SETGID, CHOWN) and no-new-privileges:true unchanged
 
 volumes:
   caddy-data:
   # ... existing volumes unchanged
 ```
 
-**docker-compose-dokploy.yml** — no changes.
+**docker-compose-dokploy.yml** — no changes to compose file itself, but the
+shared Dockerfile changes (port 8080, caddy instead of nginx) apply. Dokploy
+auto-detects the EXPOSE port, so the change from 8080 (nginx) to 8080 (caddy)
+is transparent. Verify Dokploy routing after deployment.
 
 ### 5. Environment Variables
 
@@ -219,7 +280,7 @@ volumes:
 # When empty: Caddy serves HTTP on port 80 (for behind-proxy or local dev)
 # GOCLAW_DOMAIN=example.com
 
-# Port mapping (host ports, container always uses 80/443)
+# Port mapping (host ports, container listens on 8080/8443)
 # GOCLAW_HTTP_PORT=80
 # GOCLAW_HTTPS_PORT=443
 ```
@@ -228,20 +289,39 @@ volumes:
 
 **Improvements over nginx:**
 - Caddy runs as non-root user `goclaw` (nginx currently runs as root)
-- `NET_BIND_SERVICE` capability added to allow non-root port 80/443 binding
+- No additional capabilities needed — Caddy uses high ports (8080/8443)
+- `no-new-privileges:true` preserved (no conflict with high ports)
+- All existing security settings unchanged (cap_drop ALL, tmpfs noexec, resource limits)
 
 **Certificate storage:**
 - Volume `caddy-data:/data` persists Let's Encrypt certificates
 - Contains: certs, ACME account keys, OCSP staples
-- User `goclaw` needs write permission to `/data`
+- Entrypoint runs `chown goclaw:goclaw /data` on startup to ensure write permission
+
+**ACME requirements (HTTPS mode only):**
+- Port 80 must be publicly accessible for HTTP-01 challenges
+- DNS A/AAAA record must point to the server's IP
+- Users behind NAT or restrictive firewalls will get certificate failures
+
+## Migration Notes
+
+**Breaking change: container port 8080 → 8080 (same), but host port default changes.**
+
+Existing users with `GOCLAW_HOST_PORT=3000` mapping to container port 8080 need to update:
+- Old: `${GOCLAW_HOST_PORT:-3000}:8080`
+- New: `${GOCLAW_HTTP_PORT:-80}:8080`
+
+To keep the same behavior, set `GOCLAW_HTTP_PORT=3000` in `.env`.
+
+**Rollback:** Pin to the previous image tag (before Caddy migration) in docker-compose.yml.
 
 ## Usage Scenarios
 
 | Scenario | Environment Config | Port Mapping |
 |----------|-------------------|--------------|
-| VPS with auto HTTPS | `GOCLAW_DOMAIN=example.com` | `80:80`, `443:443` |
-| Behind external proxy | No domain set | `8080:80` |
-| Local development | No domain set | `3000:80` |
+| VPS with auto HTTPS | `GOCLAW_DOMAIN=example.com` | `80:8080`, `443:8443` |
+| Behind external proxy | No domain set, `GOCLAW_HTTP_PORT=8080` | `8080:8080` |
+| Local development | No domain set, `GOCLAW_HTTP_PORT=3000` | `3000:8080` |
 
 ## Files Changed
 
@@ -254,7 +334,7 @@ volumes:
 | Modify | `docker-compose.yml` |
 | Modify | `docker-compose-build.yml` |
 | Modify | `.env.example` |
-| Modify | `Makefile` (healthcheck port reference) |
+| Modify | `Makefile` (if any healthcheck/port references exist) |
 | Modify | `docs/deployment-guide.md` |
 | Delete | `nginx.conf` |
 | Delete | `nginx-main.conf` |
