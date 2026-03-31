@@ -1,11 +1,11 @@
 # syntax=docker/dockerfile:1
 #
 # GoClaw All-in-One Image
-# Build context: ../goclaw-core (upstream source)
+# Build context: ./goclaw-core (git submodule)
 # Named context: deploy=. (this repo's config files)
 #
 # Build:
-#   docker buildx build --build-context deploy=. -f Dockerfile -t itsddvn/goclaw ../goclaw-core
+#   docker buildx build --build-context deploy=. -f Dockerfile -t itsddvn/goclaw ./goclaw-core
 
 # ── Stage 1: Build ──
 FROM golang:1.26-bookworm AS builder

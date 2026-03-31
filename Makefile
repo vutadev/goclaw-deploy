@@ -1,4 +1,4 @@
-GOCLAW_DIR ?= ../goclaw
+GOCLAW_DIR ?= ./goclaw-core
 IMAGE      ?= itsddvn/goclaw
 VERSION    ?= $(shell cd $(GOCLAW_DIR) && git describe --tags --always 2>/dev/null || echo dev)
 PLATFORMS  ?= linux/amd64,linux/arm64

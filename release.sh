@@ -4,7 +4,7 @@ set -euo pipefail
 # ── Config ──────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DEPLOY_DIR="$SCRIPT_DIR"
-CORE_DIR="$(dirname "$DEPLOY_DIR")/goclaw-core"
+CORE_DIR="$DEPLOY_DIR/goclaw-core"
 IMAGE="itsddvn/goclaw"
 HEALTH_RETRIES=30
 HEALTH_INTERVAL=5

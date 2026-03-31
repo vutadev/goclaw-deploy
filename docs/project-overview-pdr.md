@@ -111,7 +111,7 @@ Provide a production-ready, containerized packaging of GoClaw that enables fast 
 
 ### Decision: Named Build Context for Deploy Configs
 **Rationale:** Avoid including deploy repo in Docker build context; keep separation of concerns.
-**Impact:** Dockerfile can reference `../goclaw-core` as build context while importing configs from deploy repo.
+**Impact:** Dockerfile can reference `./goclaw-core` as build context while importing configs from deploy repo.
 
 ### Decision: Three Compose Variants
 **Rationale:** Support different deployment scenarios without duplicating service definitions.
@@ -128,7 +128,7 @@ Provide a production-ready, containerized packaging of GoClaw that enables fast 
 ## Technical Constraints
 
 ### Upstream Dependency
-- **goclaw-core** repo (sibling directory ../goclaw-core)
+- **goclaw-core** is included as a git submodule at ./goclaw-core
 - Requires main + develop branches
 - Must have upstream remote configured
 - Uses git tags for versioning

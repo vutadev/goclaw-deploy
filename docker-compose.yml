@@ -9,12 +9,12 @@
 
 services:
   goclaw:
-    image: itsddvn/goclaw:v2.47.2
+    image: itsddvn/goclaw:v2.50.0
     volumes:
       - goclaw-data:/app/data
       - goclaw-workspace:/app/workspace
     ports:
-      - "${GOCLAW_PORT:-3000}:18790"
+      - "${GOCLAW_HOST_PORT:-3000}:18790"
     env_file:
       - path: .env
         required: false

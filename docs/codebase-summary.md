@@ -110,14 +110,14 @@ Production composition: uses pre-built image from Docker Hub, no build step.
 Development composition: builds from source, useful for testing changes.
 
 **Differences from docker-compose.yml:**
-- `build:` instead of `image:` — builds Dockerfile from ../goclaw-core context
+- `build:` instead of `image:` — builds Dockerfile from ./goclaw-core context
 - Dockerfile from $(PWD)/Dockerfile (deploy repo)
 - Additional contexts: deploy=. (enables COPY --from=deploy)
 - Platform: linux/amd64 (explicit, no multi-arch)
 - GOCLAW_VERSION build arg (default: dev)
 - Otherwise identical to production (volumes, security, resources)
 
-**Prerequisites:** Requires ../goclaw-core sibling directory with go.mod, ui/web/, migrations/.
+**Prerequisites:** Requires the goclaw-core git submodule at ./goclaw-core with go.mod, ui/web/, migrations/.
 
 #### docker-compose-dokploy.yml (71 LOC)
 Dokploy PaaS deployment with external network.
@@ -140,7 +140,7 @@ Fully automated release workflow: sync upstream, review configs, build, push, sm
 - `./release.sh full` — sync + publish (default)
 
 **Preflight Checks:**
-- goclaw-core exists at ../goclaw-core
+- goclaw-core git submodule is initialized at ./goclaw-core
 - Upstream remote configured in goclaw-core
 - Docker and docker buildx available
 - Lock file (prevents concurrent runs)
@@ -213,7 +213,7 @@ COPY --from=deploy entrypoint.sh /app/entrypoint.sh
 
 Build command:
 ```bash
-docker buildx build --build-context deploy=. -f Dockerfile -t image:tag ../goclaw-core
+docker buildx build --build-context deploy=. -f Dockerfile -t image:tag ./goclaw-core
 ```
 
 ### Managed Mode + Auto-Migration
@@ -314,7 +314,7 @@ git push
 ### Local Development Build
 ```bash
 docker compose -f docker-compose-build.yml up -d --build
-# Edits to ../goclaw-core reflect on rebuild
+# Edits to ./goclaw-core reflect on rebuild
 ```
 
 ### Reset Database

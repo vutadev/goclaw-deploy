@@ -54,7 +54,7 @@ FROM alpine
 **Rationale:** Minimize final image size, security (no build tools).
 
 ### Pattern: Named Build Contexts
-Allow copying files from sibling repos without bloating Docker context.
+goclaw-core is included as a git submodule at ./goclaw-core, so build contexts can copy files without bloating the Docker context.
 
 ```dockerfile
 COPY --from=deploy nginx.conf /etc/nginx/http.d/default.conf
@@ -62,7 +62,7 @@ COPY --from=deploy nginx.conf /etc/nginx/http.d/default.conf
 
 Build command:
 ```bash
-docker buildx build --build-context deploy=. -f Dockerfile ../goclaw-core
+docker buildx build --build-context deploy=. -f Dockerfile ./goclaw-core
 ```
 
 ### Pattern: Cross-Platform Compilation
@@ -179,7 +179,7 @@ services:
 services:
   goclaw:
     build:                       # From source
-      context: ../goclaw-core
+      context: ./goclaw-core
       dockerfile: ${PWD}/Dockerfile
 ```
 
@@ -286,7 +286,7 @@ trap "rm -f $LOCKFILE" EXIT
 
 ### Pattern: Variable Defaults
 ```makefile
-GOCLAW_DIR ?= ../goclaw
+GOCLAW_DIR ?= ./goclaw-core
 IMAGE      ?= itsddvn/goclaw
 VERSION    ?= $(shell git describe --tags 2>/dev/null || echo dev)
 ```

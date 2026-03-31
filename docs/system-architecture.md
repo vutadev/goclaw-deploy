@@ -56,7 +56,7 @@ Complete overview of GoClaw Deploy architecture, component interactions, and dat
 FROM --platform=$BUILDPLATFORM golang:1.25-bookworm AS go-builder
 
 Purpose: Compile Go binary with cross-platform support
-Input:   ../goclaw-core (go.mod, *.go, migrations/)
+Input:   ./goclaw-core (go.mod, *.go, migrations/)
 Output:  /out/goclaw (stripped, static binary)
 
 Steps:
@@ -77,7 +77,7 @@ Steps:
 FROM --platform=$BUILDPLATFORM node:22-alpine AS web-builder
 
 Purpose: Build React SPA
-Input:   ../goclaw-core/ui/web/ (source + pnpm-lock.yaml)
+Input:   ./goclaw-core/ui/web/ (source + pnpm-lock.yaml)
 Output:  /app/dist (Vite static bundle)
 
 Steps:
@@ -451,7 +451,7 @@ Ready (~10s)
 ```
 docker compose -f docker-compose-build.yml up -d --build
     ↓
-Build from ../goclaw-core (stage 1: Go, stage 2: Web, stage 3: runtime)
+Build from ./goclaw-core (stage 1: Go, stage 2: Web, stage 3: runtime)
     ↓
 Start container
     ↓

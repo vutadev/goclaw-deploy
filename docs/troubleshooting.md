@@ -369,8 +369,8 @@ docker compose exec postgres psql \
 
 Check migration files:
 ```bash
-# In goclaw-core repo
-ls ../goclaw-core/migrations/
+# In the ./goclaw-core submodule
+ls ./goclaw-core/migrations/
 # Should contain SQL files (001_, 002_, etc.)
 
 # Verify they're in image
@@ -814,12 +814,10 @@ error building context: ...
 
 Check build context:
 ```bash
-# Verify goclaw-core exists
-ls -la ../goclaw-core/
-# Should have: go.mod, ui/web/, migrations/
-
-# If missing, clone
-git clone https://github.com/nextlevelbuilder/goclaw.git ../goclaw-core
+# Verify ./goclaw-core submodule exists
+ls -la ./goclaw-core/
+# If missing, initialize submodule
+git submodule update --init --recursive
 ```
 
 Check Dockerfile:
@@ -854,13 +852,13 @@ error building context: /src: ...
 
 **Solution:**
 
-Check goclaw-core source:
+Check ./goclaw-core source:
 ```bash
-ls ../goclaw-core/*.go
+ls ./goclaw-core/*.go
 # Should have main.go and other files
-
-cd ../goclaw-core
+cd ./goclaw-core
 git log -1  # Check if repo valid
+```
 ```
 
 Check Go version:
@@ -872,8 +870,8 @@ cat Dockerfile | grep "golang:"
 
 Build errors in code:
 ```bash
-# Check goclaw-core for syntax errors
-cd ../goclaw-core
+# Check ./goclaw-core for syntax errors
+cd ./goclaw-core
 go build
 # This shows compilation issues
 ```
@@ -893,16 +891,17 @@ error building context: ui/web build failed
 
 Check web source:
 ```bash
-ls -la ../goclaw-core/ui/web/
+ls -la ./goclaw-core/ui/web/
 # Should have: package.json, pnpm-lock.yaml
 ```
 
 Build locally:
 ```bash
-cd ../goclaw-core/ui/web
+cd ./goclaw-core/ui/web
 pnpm install
 pnpm build
 # Shows actual error messages
+```
 ```
 
 Check pnpm version:

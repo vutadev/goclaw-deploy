@@ -213,7 +213,7 @@ docker compose logs postgres --tail=20
 
 **Use case:** Test changes to code, modify Dockerfile/config, don't push to Docker Hub.
 
-**Prerequisites:** `../goclaw-core` sibling directory with source code.
+**Prerequisites:** `./goclaw-core` git submodule with source code.
 
 **Time to ready:** ~90 seconds (includes build)
 
@@ -229,18 +229,16 @@ docker compose -f docker-compose-build.yml up -d --build
 
 ```bash
 # Check that goclaw-core exists
-ls -la ../goclaw-core/go.mod
-ls -la ../goclaw-core/ui/web/package.json
-ls -la ../goclaw-core/migrations/
+ls -la ./goclaw-core/go.mod
+ls -la ./goclaw-core/ui/web/package.json
+ls -la ./goclaw-core/migrations/
 
 # All should exist
 ```
 
 If missing:
 ```bash
-cd ..
-git clone https://github.com/nextlevelbuilder/goclaw.git goclaw-core
-cd goclaw-deploy
+git submodule update --init --recursive
 ```
 
 #### Step 2: Build Image
@@ -282,7 +280,7 @@ Open: **http://localhost:3000**
 **Make changes to goclaw-core source:**
 
 ```bash
-cd ../goclaw-core
+cd ./goclaw-core
 # Edit files, commit
 git add .
 git commit -m "..."
@@ -487,7 +485,7 @@ docker compose up -d
 
 ```bash
 # Pull latest source
-cd ../goclaw-core
+cd ./goclaw-core
 git pull origin main
 
 # Rebuild container

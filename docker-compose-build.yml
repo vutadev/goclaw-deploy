@@ -1,7 +1,7 @@
 # GoClaw All-in-One — Local build mode (build from source + pgAdmin)
 #
 # Prerequisites:
-#   Clone goclaw-core source to ../goclaw-core (sibling directory)
+#   goclaw-core is included as a git submodule
 #
 # Usage:
 #   docker compose -f docker-compose-build.yml up -d --build
@@ -14,14 +14,14 @@ services:
   goclaw:
     platform: linux/amd64
     build:
-      context: ../goclaw-core
+      context: ./goclaw-core
       dockerfile: ${PWD}/Dockerfile
       additional_contexts:
         deploy: .
       args:
         VERSION: ${GOCLAW_VERSION:-dev}
     ports:
-      - "${GOCLAW_UI_PORT:-3000}:18790"
+      - "${GOCLAW_HOST_PORT:-3000}:18790"
     volumes:
       - goclaw-data:/app/data
       - goclaw-workspace:/app/workspace
