@@ -200,8 +200,8 @@ else
     cp /app/Caddyfile.http /tmp/Caddyfile
 fi
 
-# Start Caddy (high ports, no special capabilities needed)
-caddy run --config /tmp/Caddyfile --adapter caddyfile &
+# Start Caddy as goclaw user (high ports, no special capabilities needed)
+run_as_goclaw caddy run --config /tmp/Caddyfile --adapter caddyfile &
 CADDY_PID=$!
 ```
 
