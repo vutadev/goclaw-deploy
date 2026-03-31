@@ -718,7 +718,7 @@ docker compose restart goclaw
 
 **Error:**
 ```
-curl http://localhost:3000/v1/...
+curl http://localhost/v1/...
 # Takes > 5 seconds
 ```
 

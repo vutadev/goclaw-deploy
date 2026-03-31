@@ -4,10 +4,14 @@ set -e
 # ── Fix volume ownership (root context only) ──
 # Docker named volumes may initialize as root-owned.
 # Ensure goclaw user owns all writable directories.
+# These are deploy-specific (workspace teams, caddy data, skills-store home).
 if [ "$(id -u)" = "0" ]; then
-  # Workspace volume — create teams dir if missing
-  # Skip chown (fails on bind mounts), ensure writable via chmod instead
-  mkdir -p /app/workspace/teams
+  # Workspace volume — create teams dir if missing.
+  # This mount is initialized from image contents owned by `goclaw`. The container
+  # drops DAC override, so root may be unable to write here even during startup.
+  if [ ! -d /app/workspace/teams ]; then
+    su-exec goclaw mkdir -p /app/workspace/teams 2>/dev/null || mkdir -p /app/workspace/teams 2>/dev/null || true
+  fi
 
   # Check if goclaw can write, if not use chmod g+w
   if ! su-exec goclaw test -w /app/workspace/teams 2>/dev/null; then
@@ -34,87 +38,6 @@ if [ "$(id -u)" = "0" ]; then
   chown goclaw:goclaw /data 2>/dev/null || true
 fi
 
-# ── Runtime directory setup ──
-# Rootfs may be read-only; /app/data is a writable Docker volume.
-RUNTIME_DIR="/app/data/.runtime"
-mkdir -p "$RUNTIME_DIR/pip" "$RUNTIME_DIR/npm-global/lib" "$RUNTIME_DIR/pip-cache" || true
-
-# Fix .runtime ownership for split root/goclaw access.
-# .runtime itself must be root-owned so pkg-helper (root) can write apk-packages.
-# Subdirs pip/, npm-global/, pip-cache/ must be goclaw-owned for runtime installs.
-if [ "$(id -u)" = "0" ] && [ -d "$RUNTIME_DIR" ]; then
-  chown root:goclaw "$RUNTIME_DIR" 2>/dev/null || true
-  chmod 0750 "$RUNTIME_DIR" 2>/dev/null || true
-  chown -R goclaw:goclaw "$RUNTIME_DIR/pip" "$RUNTIME_DIR/npm-global" "$RUNTIME_DIR/pip-cache" 2>/dev/null || true
-fi
-
-# ── Python/Node writable install paths ──
-export PYTHONPATH="$RUNTIME_DIR/pip:${PYTHONPATH:-}"
-export PIP_TARGET="$RUNTIME_DIR/pip"
-export PIP_BREAK_SYSTEM_PACKAGES=1
-export PIP_CACHE_DIR="$RUNTIME_DIR/pip-cache"
-
-export NPM_CONFIG_PREFIX="$RUNTIME_DIR/npm-global"
-export NODE_PATH="/usr/local/lib/node_modules:$RUNTIME_DIR/npm-global/lib/node_modules:${NODE_PATH:-}"
-export PATH="$RUNTIME_DIR/npm-global/bin:$RUNTIME_DIR/pip/bin:$PATH"
-
-# ── Re-install persisted system packages ──
-APK_LIST="$RUNTIME_DIR/apk-packages"
-if [ "$(id -u)" = "0" ]; then
-  touch "$APK_LIST" 2>/dev/null || true
-  chown root:goclaw "$APK_LIST" 2>/dev/null || true
-  chmod 0640 "$APK_LIST" 2>/dev/null || true
-fi
-if [ -f "$APK_LIST" ] && [ -s "$APK_LIST" ]; then
-  echo "Re-installing persisted system packages..."
-  VALID_PKGS=""
-  while IFS= read -r pkg || [ -n "$pkg" ]; do
-    pkg="$(printf '%s' "$pkg" | tr -d '[:space:]')"
-    case "$pkg" in
-      [a-zA-Z0-9@]*) VALID_PKGS="$VALID_PKGS $pkg" ;;
-      "") ;;
-      *) echo "WARNING: skipping invalid package: $pkg" ;;
-    esac
-  done < "$APK_LIST"
-  if [ -n "$VALID_PKGS" ]; then
-    # shellcheck disable=SC2086
-    apk add --no-cache $VALID_PKGS 2>/dev/null || \
-      echo "Warning: some packages failed to install"
-  fi
-fi
-
-# ── Start pkg-helper (root-privileged package installer) ──
-if [ -x /app/pkg-helper ] && [ "$(id -u)" = "0" ]; then
-  /app/pkg-helper &
-  PKG_PID=$!
-  for _i in 1 2 3 4; do
-    [ -S /tmp/pkg.sock ] && break
-    sleep 0.5
-  done
-  if ! [ -S /tmp/pkg.sock ]; then
-    echo "ERROR: pkg-helper failed to start (PID $PKG_PID)"
-    kill "$PKG_PID" 2>/dev/null || true
-  fi
-fi
-
-# ── Claude CLI credentials sync ──
-# Copy credentials from root-owned read-only mount to goclaw-accessible location.
-# /app/.claude is a symlink → /app/data/.claude (writable volume, see core Dockerfile).
-if [ -f /app/.claude-host/.credentials.json ]; then
-  (mkdir -p /app/data/.claude \
-    && if command -v su-exec >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
-         su-exec goclaw sh -c 'umask 077 && cp /app/.claude-host/.credentials.json /app/data/.claude/.credentials.json'
-       else
-         ( umask 077 && cp /app/.claude-host/.credentials.json /app/data/.claude/.credentials.json )
-       fi \
-    && echo "Claude CLI credentials synced from host.") || echo "WARNING: Claude credentials copy failed (non-fatal)"
-fi
-
-# Warn if Claude credentials are mounted but CLI binary is missing.
-if [ -d /app/.claude-host ] && ! command -v claude >/dev/null 2>&1; then
-  echo "WARNING: Claude credentials mounted but claude CLI not installed. Rebuild with ENABLE_CLAUDE_CLI=true"
-fi
-
 # ── Helpers ──
 run_as_goclaw() {
   if command -v su-exec >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
@@ -124,9 +47,21 @@ run_as_goclaw() {
   fi
 }
 
-# Graceful shutdown: kill both processes
+process_is_running() {
+  [ -n "$1" ] && [ -d "/proc/$1" ]
+}
+
+terminate_pid() {
+  pid="$1"
+  kill "$pid" 2>/dev/null || true
+  if command -v su-exec >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
+    su-exec goclaw kill "$pid" 2>/dev/null || true
+  fi
+}
+
 shutdown() {
-    kill "$GOCLAW_PID" "$CADDY_PID" 2>/dev/null
+    terminate_pid "$GOCLAW_PID"
+    terminate_pid "$CADDY_PID"
     wait "$GOCLAW_PID" "$CADDY_PID" 2>/dev/null
     exit 0
 }
@@ -134,13 +69,6 @@ shutdown() {
 # ── Main ──
 case "${1:-serve}" in
     serve)
-        # Auto-upgrade (schema migrations + data hooks) before starting
-        if [ -n "$GOCLAW_POSTGRES_DSN" ]; then
-            echo "Running database upgrade..."
-            run_as_goclaw /app/goclaw upgrade || \
-                echo "Upgrade warning (may already be up-to-date)"
-        fi
-
         # Select Caddyfile based on GOCLAW_DOMAIN
         if [ -n "$GOCLAW_DOMAIN" ]; then
             envsubst '$GOCLAW_DOMAIN' < /app/Caddyfile.https > /tmp/Caddyfile
@@ -148,37 +76,33 @@ case "${1:-serve}" in
             cp /app/Caddyfile.http /tmp/Caddyfile
         fi
 
-        # Start goclaw in background (as goclaw user)
-        run_as_goclaw /app/goclaw &
+        # Start goclaw via core entrypoint in a subshell.
+        # Core handles all shared init (runtime dirs, env, pkg-helper, claude creds,
+        # db upgrade) then exec's into goclaw — replacing the subshell, not this script.
+        (/app/docker-entrypoint.sh serve) &
         GOCLAW_PID=$!
 
-        # Start Caddy as goclaw user (high ports, no special capabilities needed)
-        run_as_goclaw caddy run --config /tmp/Caddyfile --adapter caddyfile &
+        # Start Caddy as goclaw user (high ports, no special capabilities needed).
+        # Launch it directly so $! is the real long-lived process, not a wrapper shell.
+        if command -v su-exec >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
+            su-exec goclaw caddy run --config /tmp/Caddyfile --adapter caddyfile &
+        else
+            caddy run --config /tmp/Caddyfile --adapter caddyfile &
+        fi
         CADDY_PID=$!
 
         trap shutdown SIGTERM SIGINT
 
-        # Exit when either process dies
-        while kill -0 "$GOCLAW_PID" 2>/dev/null && kill -0 "$CADDY_PID" 2>/dev/null; do
+        # Under cap-drop/no-new-privileges, root may lack permission to signal
+        # same-container processes after they switch to the goclaw UID. Track liveness
+        # by /proc presence instead of kill -0 so startup doesn't kill healthy children.
+        while process_is_running "$GOCLAW_PID" && process_is_running "$CADDY_PID"; do
             sleep 1
         done
         shutdown
         ;;
-    upgrade)
-        shift
-        run_as_goclaw /app/goclaw upgrade "$@"
-        ;;
-    migrate)
-        shift
-        run_as_goclaw /app/goclaw migrate "$@"
-        ;;
-    onboard)
-        run_as_goclaw /app/goclaw onboard
-        ;;
-    version)
-        run_as_goclaw /app/goclaw version
-        ;;
     *)
-        run_as_goclaw /app/goclaw "$@"
+        # All other commands: delegate to core entrypoint (handles init + exec)
+        exec /app/docker-entrypoint.sh "$@"
         ;;
 esac
