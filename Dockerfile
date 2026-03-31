@@ -28,13 +28,13 @@ RUN pnpm build
 FROM ${CORE_IMAGE}
 
 # Add caddy for serving web UI + reverse proxying to goclaw backend (supports auto HTTPS)
-RUN apk add --no-cache caddy gettext-envsubst
+RUN apk add --no-cache caddy
 
 # Web UI assets
 COPY --from=webbuilder /app/dist /app/dist
 
 # Caddy config
-COPY Caddyfile.http Caddyfile.https /app/
+COPY Caddyfile /app/
 
 # Consolidated entrypoint (manages both goclaw + caddy)
 COPY entrypoint.sh /app/entrypoint.sh

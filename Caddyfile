@@ -4,7 +4,7 @@
     storage file_system /data
 }
 
-${GOCLAW_DOMAIN} {
+{$CADDY_SITE_ADDRESS} {
     root * /app/dist
     encode gzip
 

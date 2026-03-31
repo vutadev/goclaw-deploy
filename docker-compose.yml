@@ -14,8 +14,7 @@ services:
       - goclaw-data:/app/data
       - goclaw-workspace:/app/workspace
       - caddy-data:/data
-      - ./Caddyfile.http:/app/Caddyfile.http:ro
-      - ./Caddyfile.https:/app/Caddyfile.https:ro
+      - ./Caddyfile:/app/Caddyfile:ro
       - ${GOCLAW_SKILLS_STORE:-/opt/goclaw/data/skills-store}:/app/data/skills-store
     ports:
       - "${GOCLAW_HTTP_PORT:-80}:8080"

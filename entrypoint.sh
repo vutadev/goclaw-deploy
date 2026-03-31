@@ -69,11 +69,11 @@ shutdown() {
 # ── Main ──
 case "${1:-serve}" in
     serve)
-        # Select Caddyfile based on GOCLAW_DOMAIN
+        # Set Caddy site address based on GOCLAW_DOMAIN
         if [ -n "$GOCLAW_DOMAIN" ]; then
-            envsubst '$GOCLAW_DOMAIN' < /app/Caddyfile.https > /tmp/Caddyfile
+            export CADDY_SITE_ADDRESS="$GOCLAW_DOMAIN"
         else
-            cp /app/Caddyfile.http /tmp/Caddyfile
+            export CADDY_SITE_ADDRESS=":8080"
         fi
 
         # Start goclaw via core entrypoint in a subshell.
@@ -85,9 +85,9 @@ case "${1:-serve}" in
         # Start Caddy as goclaw user (high ports, no special capabilities needed).
         # Launch it directly so $! is the real long-lived process, not a wrapper shell.
         if command -v su-exec >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
-            su-exec goclaw caddy run --config /tmp/Caddyfile --adapter caddyfile &
+            su-exec goclaw caddy run --config /app/Caddyfile --adapter caddyfile &
         else
-            caddy run --config /tmp/Caddyfile --adapter caddyfile &
+            caddy run --config /app/Caddyfile --adapter caddyfile &
         fi
         CADDY_PID=$!
 
