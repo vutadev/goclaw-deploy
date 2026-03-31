@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# GoClaw All-in-One Image (core + nginx + web UI)
+# GoClaw All-in-One Image (core + caddy + web UI)
 #
 # Requires core image to be built first from goclaw-core/Dockerfile.
 # Use the Makefile targets which handle both steps automatically:
@@ -24,25 +24,24 @@ RUN pnpm install --frozen-lockfile
 COPY goclaw-core/ui/web/ .
 RUN pnpm build
 
-# ── Stage 2: All-in-one runtime (core + nginx + web UI) ──
+# ── Stage 2: All-in-one runtime (core + caddy + web UI) ──
 FROM ${CORE_IMAGE}
 
-# Add nginx for serving web UI + reverse proxying to goclaw backend
-RUN apk add --no-cache nginx
+# Add caddy for serving web UI + reverse proxying to goclaw backend (supports auto HTTPS)
+RUN apk add --no-cache caddy gettext-envsubst
 
 # Web UI assets
-COPY --from=webbuilder /app/dist /usr/share/nginx/html
+COPY --from=webbuilder /app/dist /app/dist
 
-# Nginx config
-COPY nginx-main.conf /etc/nginx/nginx.conf
-COPY nginx.conf /etc/nginx/http.d/default.conf
+# Caddy config
+COPY Caddyfile.http Caddyfile.https /app/
 
-# Consolidated entrypoint (manages both goclaw + nginx)
+# Consolidated entrypoint (manages both goclaw + caddy)
 COPY entrypoint.sh /app/entrypoint.sh
 RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
-# nginx listens on 8080, goclaw on 18790 (internal)
-EXPOSE 8080
+# caddy listens on 8080 (HTTP) and 8443 (HTTPS), goclaw on 18790 (internal)
+EXPOSE 8080 8443
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -qO- http://localhost:8080/health || exit 1
