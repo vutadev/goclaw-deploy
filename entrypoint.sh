@@ -29,6 +29,9 @@ if [ "$(id -u)" = "0" ]; then
 
   # Skills-store home — binary writes to /home/goclaw/.goclaw/skills-store/
   mkdir -p /home/goclaw/.goclaw && chown -R goclaw:goclaw /home/goclaw
+
+  # Caddy data volume — certificates persist here
+  chown goclaw:goclaw /data 2>/dev/null || true
 fi
 
 # ── Runtime directory setup ──
@@ -123,9 +126,8 @@ run_as_goclaw() {
 
 # Graceful shutdown: kill both processes
 shutdown() {
-    kill "$GOCLAW_PID" 2>/dev/null
-    kill "$NGINX_PID" 2>/dev/null
-    wait "$GOCLAW_PID" "$NGINX_PID" 2>/dev/null
+    kill "$GOCLAW_PID" "$CADDY_PID" 2>/dev/null
+    wait "$GOCLAW_PID" "$CADDY_PID" 2>/dev/null
     exit 0
 }
 
@@ -139,22 +141,25 @@ case "${1:-serve}" in
                 echo "Upgrade warning (may already be up-to-date)"
         fi
 
-        # Prepare nginx writable dirs under /tmp (read-only filesystem)
-        mkdir -p /tmp/nginx/client_body /tmp/nginx/proxy /tmp/nginx/fastcgi \
-                 /tmp/nginx/uwsgi /tmp/nginx/scgi /tmp/nginx/logs /tmp/nginx/run
+        # Select Caddyfile based on GOCLAW_DOMAIN
+        if [ -n "$GOCLAW_DOMAIN" ]; then
+            envsubst '$GOCLAW_DOMAIN' < /app/Caddyfile.https > /tmp/Caddyfile
+        else
+            cp /app/Caddyfile.http /tmp/Caddyfile
+        fi
 
         # Start goclaw in background (as goclaw user)
         run_as_goclaw /app/goclaw &
         GOCLAW_PID=$!
 
-        # Start nginx (writable paths configured in nginx-main.conf → /tmp/nginx/)
-        nginx -e /tmp/nginx/error.log -g 'daemon off;' &
-        NGINX_PID=$!
+        # Start Caddy as goclaw user (high ports, no special capabilities needed)
+        run_as_goclaw caddy run --config /tmp/Caddyfile --adapter caddyfile &
+        CADDY_PID=$!
 
         trap shutdown SIGTERM SIGINT
 
         # Exit when either process dies
-        while kill -0 "$GOCLAW_PID" 2>/dev/null && kill -0 "$NGINX_PID" 2>/dev/null; do
+        while kill -0 "$GOCLAW_PID" 2>/dev/null && kill -0 "$CADDY_PID" 2>/dev/null; do
             sleep 1
         done
         shutdown
