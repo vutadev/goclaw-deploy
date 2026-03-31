@@ -70,8 +70,8 @@ docker compose -f docker-compose-dokploy.yml up -d
 
 | Service | URL |
 |---|---|
-| Dashboard | http://localhost:3000 |
-| API | http://localhost:3000/v1/ |
+| Dashboard | http://localhost |
+| API | http://localhost/v1/ |
 | pgAdmin | http://localhost:5050 |
 
 ## Compose Variants
@@ -180,7 +180,9 @@ POSTGRES_DB=goclaw               # Default
 ### Ports
 
 ```
-GOCLAW_PORT=3000                 # Dashboard + API (maps to 18790 in container)
+GOCLAW_HTTP_PORT=80              # HTTP host port (maps to container port 8080)
+GOCLAW_HTTPS_PORT=443            # HTTPS host port (maps to container port 8443, requires GOCLAW_DOMAIN)
+GOCLAW_DOMAIN=                   # Set to enable auto HTTPS via Caddy (e.g. goclaw.example.com)
 ```
 
 ## Architecture
@@ -188,6 +190,12 @@ GOCLAW_PORT=3000                 # Dashboard + API (maps to 18790 in container)
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  Container (Alpine Linux)                               │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │  Caddy (port 8080 HTTP / 8443 HTTPS)            │   │
+│  │  - Reverse proxy for API and WebSocket          │   │
+│  │  - Serves React SPA static files               │   │
+│  │  - Auto HTTPS via Let's Encrypt (GOCLAW_DOMAIN) │   │
+│  └─────────────────────────────────────────────────┘   │
 │  ┌─────────────────────────────────────────────────┐   │
 │  │  GoClaw backend (port 18790)                    │   │
 │  │  - Go binary with auto-migrations              │   │
@@ -200,7 +208,7 @@ GOCLAW_PORT=3000                 # Dashboard + API (maps to 18790 in container)
 │  │  - Handles apk installs for skills on-demand    │   │
 │  └─────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────┘
-           ↓ (port 3000 → 18790)
+           ↓ (port 80 → 8080, port 443 → 8443)
 ┌─────────────────────────────────────────────────────────┐
 │  PostgreSQL 18 + pgvector                               │
 │  - Vector database for embeddings                       │
@@ -242,7 +250,7 @@ docker compose logs goclaw --tail=50
 Common causes:
 - Database not ready: Check `docker compose ps` for postgres health
 - Migration failed: Check logs for SQL errors
-- Port conflict: `lsof -i :3000`
+- Port conflict: `lsof -i :80`
 
 ### Submodule is empty
 
